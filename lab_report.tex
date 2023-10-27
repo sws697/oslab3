@@ -1,0 +1,216 @@
+\documentclass[UTF8]{ctexart}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{extarrows}
+\usepackage{bm}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+\title{操作系统实验三}
+\author{汪航 2021211114}
+\date{\today}
+\begin{document}
+\maketitle
+\section{实验内容}
+本次实验共编写两道程序,第一个程序使用POSIX标准的pthread库编写了多线程执行求平均数、求最大值、求最小值的程序；第二个程序使用了pthread库编写了矩阵乘程序。
+\section{实验环境}
+Linux操作系统,gcc编译
+\section{程序一}
+\subsection{主要内容}
+以多个数字为输入，使用pthread库编写求这多个数字的平均数、最大值、最小值的多线程程序。
+
+\paragraph{使用API:}pthread\_attr\_init, pthread\_create, pthread\_join
+\subsection{程序设计思路}
+开辟三个线程, 三个线程分别用于计算平均数、最大值、最小值，平均数、最大值、最小值设置为全局变量，父子线程之间通过全局变量传递信息，最终结果由父线程打印。\\
+程序实现:
+\begin{lstlisting}[language=C]
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+int minimum = __INT32_MAX__;
+int maximum = -__INT32_MAX__ - 1;
+int average = 0;
+int numbercount = 0;
+void *claverage(char *param[]);
+void *clminimum(char *param[]);
+void *clmaximum(char *param[]);
+int main(int argc, char *argv[])
+{
+    pthread_t workers[3];
+    pthread_attr_t attr;
+    numbercount = argc - 1;
+
+    pthread_attr_init(&attr);
+
+    pthread_create(&workers[0], &attr, claverage, argv);
+    pthread_create(&workers[1], &attr, clminimum, argv);
+    pthread_create(&workers[2], &attr, clmaximum, argv);
+    for (int i = 0; i < 3; i++)
+    {
+        pthread_join(workers[i], NULL);
+    }
+    printf("The average value is %d\n", average);
+    printf("The minumum value is %d\n", minimum);
+    printf("The maximum value is %d\n", maximum);
+    return 0;
+}
+void *claverage(char *param[])
+{
+    for (int i = 1; i <= numbercount; i++)
+    {
+        average += atoi(param[i]);
+    }
+    average = average / numbercount;
+}
+void *clminimum(char *param[])
+{
+    for (int i = 1; i <= numbercount; i++)
+    {
+        int k = atoi(param[i]);
+        if (k < minimum)
+        {
+            minimum = k;
+        }
+    }
+}
+void *clmaximum(char *param[])
+{
+    for (int i = 1; i <= numbercount; i++)
+    {
+        int k = atoi(param[i]);
+        if (k > maximum)
+        {
+            maximum = k;
+        }
+    }
+}
+\end{lstlisting}
+\subsection{程序测试结果及测试结果分析}
+\paragraph{输入:}./lab3 90 81 78 95 79 72 85
+\paragraph{输出:}The average value is 82\\
+The minumum value is 72\\
+The maximum value is 95\\
+\paragraph{输入:}./lab3 29 281 4 2 44 2 45 31 563
+\paragraph{输出:}The average value is 111\\
+The minumum value is 2\\
+The maximum value is 563\\
+\paragraph{输入:}./lab3 -2 3 -212 213 -2 -6
+\paragraph{输出:}The average value is -1\\
+The minumum value is -212\\
+The maximum value is 213\\
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{1.png}
+    \caption{运行结果}
+\end{figure} 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{2.png}
+    \caption{运行结果}
+\end{figure} 
+经分析,该程序能够正常执行期望的求平均数、最大值、最小值功能。
+\section{程序二}
+\subsection{主要内容}
+给定矩阵A,B，求A*B的结果C.
+
+\paragraph{使用API:}pthread\_attr\_init, pthread\_create, pthread\_join
+\subsection{程序设计思路}
+A为M*K矩阵, B为K*N矩阵，则对每一个\(C_{i,j}\)都可以开辟一个线程进行\(C_{i,j}\)的计算，计算\(C_{i,j}\)的线程执行了\(\sum_{n=1}^{k}A_{i,n}B_{n,j}\)的计算。\\
+程序实现:
+\begin{lstlisting}[language=C]
+#include<pthread.h>
+#include<stdio.h>
+#include<stdlib.h>
+#define M 3
+#define K 2
+#define N 3
+struct v
+{
+    int row;
+    int column;
+};
+
+int A[M][K] = {{1, 4}, {2, 5}, {3, 6}};
+int B[K][N] = {{8,7,6},{5,4,3}};
+int C[M][N]={0};
+void *runner(void * param)
+{
+
+    int row = ((struct v *)param)->row;
+    int column = ((struct v *)param)->column;
+    for (int i = 0; i < K;i++)
+    {
+        C[row][column] += A[row][i] * B[i][column];
+    }
+}
+int main()
+{
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_t workers[M * N];
+    for (int i = 0; i < M; i++)
+    {
+        for (int j = 0; j < N;j++)
+        {
+            struct v *data = (struct v *)malloc(sizeof (struct v));
+            data->row = i;
+            data->column = j;
+            pthread_create(&workers[i * N + j], &attr, runner, data);
+        }
+    }
+    for (int i = 0; i < M;i++)
+    {
+        for (int j = 0; j < N;j++)
+        {
+            pthread_join(workers[i * N + j], NULL);
+        }
+    }
+    for (int i = 0; i < M;i++)
+    {
+        for (int j = 0; j < N;j++)
+        {
+            printf("%d ", C[i][j]);
+        }
+        printf("\n");
+    }
+}
+\end{lstlisting}
+\subsection{程序测试结果及测试结果分析}
+\paragraph{输入:}A:\{\{1, 4\}, \{2, 5\}, \{3, 6\}\}, B:\{\{8,7,6\},\{5,4,3\}\};
+\paragraph{输出:} 
+ 
+28 23 18 \\
+41 34 27 \\
+54 45 36\\
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=9.5cm,height=10cm]{3.png}
+    \caption{运行结果}
+\end{figure} 
+经分析,该程序能够正常执行期望的矩阵相乘功能。
+\end{document}
